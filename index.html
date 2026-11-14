@@ -1,12 +1,15 @@
-<!DOCTYPE html>
-<!-- saved from url=(0051)file:///C:/Users/12282/Downloads/Feeding%20Log.html -->
-<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Feeding Log">
 <meta name="theme-color" content="#fdf0f3">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="icon-512.png">
+<link rel="manifest" href="manifest.json">
 <title>Feeding Log</title>
 <style>
 :root{--bg:#fdf0f3;--card:#fff;--ink:#4a2f3a;--mute:#9a7684;--rose:#e58aa5;--rose2:#f7c9d6;--soft:#fbe3ea;--line:#f3d3dd;--ok:#7bb394;
@@ -53,17 +56,19 @@ h2{font-family:Georgia,serif;font-weight:400;font-size:18px;margin:18px 4px 8px;
 .x{border:0;background:none;color:var(--mute);font-size:18px;padding:6px}
 .x.sure{color:#fff;background:var(--rose);border-radius:10px;font-size:13px;padding:6px 10px}
 .empty{text-align:center;color:var(--mute);padding:20px}
+.stat{text-align:center;color:var(--mute);font-size:13px;margin-top:18px}.stat.warn{color:var(--rose)}.stat button{border:0;background:none;color:var(--rose);font:inherit;font-size:13px;text-decoration:underline;padding:6px}
 </style>
 </head>
 <body>
 <main>
 <h1>Feeding Log 🌸</h1>
 
+<div class="card hide" id="setup"><div style="font-family:Georgia,serif;font-size:18px;margin-bottom:10px">Shared log setup</div><label>Database URL</label><input id="cfgDb" placeholder="https://yourproject-default-rtdb.firebaseio.com" autocapitalize="off" autocorrect="off" style="margin-bottom:10px"><label>Family code (same on both phones)</label><input id="cfgCode" placeholder="e.g. rosebud2026" autocapitalize="off" autocorrect="off" style="margin-bottom:12px"><button class="save" id="cfgSave">Connect</button></div>
 <div class="card next" id="next">
   <small>Next feeding</small>
   <div class="big" id="nextT">—</div>
   <div class="sub" id="nextS">Log a feeding to start</div>
-  <div class="chips" id="chips"><button class="chip" data-h="1.5">1.5h</button><button class="chip" data-h="2">2h</button><button class="chip on" data-h="2.5">2.5h</button><button class="chip" data-h="3">3h</button><button class="chip" data-h="3.5">3.5h</button><button class="chip" data-h="4">4h</button></div>
+  <div class="chips" id="chips"></div>
   <div class="chips"><span style="color:var(--mute);align-self:center;font-size:14px">Every</span>
   <input id="ivl" type="number" step="0.25" min="0.5" max="12" style="width:80px;text-align:center"><span style="color:var(--mute);align-self:center;font-size:14px">hours</span></div>
 </div>
@@ -76,7 +81,7 @@ h2{font-family:Georgia,serif;font-weight:400;font-size:18px;margin:18px 4px 8px;
       <div><label>Start</label><div class="tw"><input type="time" id="s1"><button class="now" data-f="s1">Now</button></div></div>
       <div><label>Finish</label><div class="tw"><input type="time" id="e1"><button class="now" data-f="e1">Now</button></div></div></div>
     <div class="dur" id="d1"></div>
-    <div class="row"><div><label>2nd side</label><select id="sd2"><option>Left</option><option selected="">Right</option></select></div>
+    <div class="row"><div><label>2nd side</label><select id="sd2"><option>Left</option><option selected>Right</option></select></div>
       <div><label>Start</label><div class="tw"><input type="time" id="s2"><button class="now" data-f="s2">Now</button></div></div>
       <div><label>Finish</label><div class="tw"><input type="time" id="e2"><button class="now" data-f="e2">Now</button></div></div></div>
     <div class="dur" id="d2"></div>
@@ -92,14 +97,17 @@ h2{font-family:Georgia,serif;font-weight:400;font-size:18px;margin:18px 4px 8px;
   <button class="save" id="save">Save feeding</button>
 </div>
 
-<div class="sum" id="sum"><div><b>0</b>feedings today</div><div><b>0</b>nursing min</div><div><b>0</b>bottle oz</div></div>
-<div id="list"><div class="empty">No feedings yet 💗<br>Your log will show up here.</div></div>
+<div class="sum" id="sum"></div>
+<div id="list"></div>
+<div class="stat" id="statBox"><span id="stat"></span> <button id="cfgOpen">Sync settings</button></div>
 </main>
 
 <script>
-var KEY='feedlog:v1', S={entries:[],interval:2.5}, type='breast', pending=null;
-try{var r=localStorage.getItem(KEY); if(r){var p=JSON.parse(r); if(p&&p.entries)S.entries=p.entries; if(p&&p.interval)S.interval=p.interval;}}catch(e){}
-function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+var EMBED={db:'',code:''};
+var CK='feedlog:cfg', KEY='feedlog:v2', S={entries:[],interval:2.5}, type='breast', pending=null, Q=[], busy=false, es=null;
+var cfg={db:EMBED.db,code:EMBED.code};
+try{var c=JSON.parse(localStorage.getItem(CK)||'null');if(c&&!EMBED.db)cfg=c}catch(e){}
+try{var r=JSON.parse(localStorage.getItem(KEY)||'null');if(r){S.entries=r.entries||[];S.interval=r.interval||2.5}}catch(e){}
 function $(i){return document.getElementById(i)}
 function pad(n){return n<10?'0'+n:''+n}
 function hhmm(d){return pad(d.getHours())+':'+pad(d.getMinutes())}
@@ -108,16 +116,56 @@ function mins(a,b){var d=Math.round((b-a)/60000);return d<0?d+1440:d}
 function strMins(a,b){if(!a||!b)return null;var x=a.split(':'),y=b.split(':');var d=(+y[0]*60+ +y[1])-(+x[0]*60+ +x[1]);return d<0?d+1440:d}
 function hrs(h){return h%1===0?h+'':h.toFixed(2).replace(/0$/,'')}
 
-/* interval */
+/* ---- sync (Firebase Realtime Database over REST) ---- */
+function ready(){return !!(cfg.db&&cfg.code)}
+function base(){return cfg.db+'/logs/'+cfg.code}
+function cache(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function status(t,w){$('stat').textContent=t;$('statBox').className='stat'+(w?' warn':'')}
+function send(m,p,b){Q.push({m:m,p:p,b:b});flush()}
+function flush(){
+  if(busy||!Q.length||!ready())return; busy=true; var q=Q[0];
+  fetch(base()+q.p+'.json',{method:q.m,body:q.b===undefined?undefined:JSON.stringify(q.b)})
+  .then(function(r){if(!r.ok)throw 0;Q.shift();busy=false;if(Q.length)flush();else refresh()})
+  .catch(function(){busy=false;status('Offline — will retry',1);setTimeout(flush,8000)});
+}
+function refresh(){
+  if(!ready()||Q.length||busy)return;
+  fetch(base()+'.json').then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(d){
+    d=d||{};var o=d.e||{},a=Object.keys(o).map(function(k){return o[k]}).filter(function(x){return x&&x.start});
+    a.sort(function(x,y){return y.start-x.start});
+    S.entries=a; if(d.interval)S.interval=+d.interval;
+    cache();drawChips();draw();status('Synced ✓');
+  }).catch(function(){status('Offline — showing saved log',1)});
+}
+function listen(){
+  if(es){es.close();es=null}
+  if(!ready()||!window.EventSource){status('Not synced — saving on this phone only',1);return}
+  es=new EventSource(base()+'.json');
+  es.addEventListener('put',refresh);es.addEventListener('patch',refresh);
+}
+function openSetup(){$('cfgDb').value=cfg.db||'';$('cfgCode').value=cfg.code||'';$('setup').classList.remove('hide')}
+$('cfgOpen').onclick=openSetup;
+$('cfgSave').onclick=function(){
+  var d=$('cfgDb').value.trim().replace(/\/+$/,''),c=$('cfgCode').value.toLowerCase().replace(/[^a-z0-9]/g,'');
+  if(d&&!/^https?:\/\//.test(d))d='https://'+d;
+  if(!d||c.length<4){status('Enter the database URL and a code of 4+ letters or numbers',1);return}
+  cfg={db:d,code:c};try{localStorage.setItem(CK,JSON.stringify(cfg))}catch(e){}
+  $('setup').classList.add('hide');status('Connecting…');listen();refresh();
+};
+document.addEventListener('visibilitychange',function(){if(!document.hidden){drawNext();refresh()}});
+setInterval(refresh,60000);
+
+/* ---- interval ---- */
 var opts=[1.5,2,2.5,3,3.5,4];
+function setIvl(v){S.interval=v;cache();send('PUT','/interval',v);drawChips();drawNext()}
 function drawChips(){
   $('chips').innerHTML=opts.map(function(o){return '<button class="chip'+(o===S.interval?' on':'')+'" data-h="'+o+'">'+hrs(o)+'h</button>'}).join('');
   $('ivl').value=S.interval;
 }
-$('chips').onclick=function(e){var h=e.target.getAttribute('data-h');if(h){S.interval=+h;save();drawChips();drawNext()}};
-$('ivl').onchange=function(){var v=parseFloat(this.value);if(v>=0.5&&v<=12){S.interval=v;save();drawChips();drawNext()}};
+$('chips').onclick=function(e){var h=e.target.getAttribute('data-h');if(h)setIvl(+h)};
+$('ivl').onchange=function(){var v=parseFloat(this.value);if(v>=0.5&&v<=12)setIvl(v)};
 
-/* next feeding */
+/* ---- next feeding ---- */
 function lastStart(){var m=0;S.entries.forEach(function(e){if(e.start>m)m=e.start});return m}
 function drawNext(){
   var ls=lastStart(), box=$('next');
@@ -129,13 +177,11 @@ function drawNext(){
   else{$('nextS').textContent=diff===0?'right now':t+' ago — time to feed';box.classList.add('due')}
 }
 
-/* tabs */
+/* ---- form ---- */
 function setType(t){type=t;$('bBreast').classList.toggle('on',t==='breast');$('bBottle').classList.toggle('on',t==='bottle');
   $('breast').classList.toggle('hide',t!=='breast');$('bottle').classList.toggle('hide',t!=='bottle');
   if(t==='bottle'&&!$('bt').value)$('bt').value=hhmm(new Date())}
 $('bBreast').onclick=function(){setType('breast')};$('bBottle').onclick=function(){setType('bottle')};
-
-/* Now buttons + live duration */
 document.querySelectorAll('.now').forEach(function(b){b.onclick=function(){$(b.getAttribute('data-f')).value=hhmm(new Date());calc()}});
 ['s1','e1','s2','e2'].forEach(function(i){$(i).oninput=calc});
 $('sd1').onchange=function(){$('sd2').value=this.value==='Left'?'Right':'Left'};
@@ -146,16 +192,15 @@ function calc(){
 }
 $('ozM').onclick=function(){$('oz').value=Math.max(0,(+$('oz').value||0)-0.5)};
 $('ozP').onclick=function(){$('oz').value=(+$('oz').value||0)+0.5};
-
-/* save */
+function tm(day,str,prev){var p=str.split(':'),d=new Date(day);d.setHours(+p[0],+p[1],0,0);var m=d.getTime();while(m<prev)m+=864e5;return m}
 $('save').onclick=function(){
   var now=Date.now(), ent;
   if(type==='breast'){
     var s1=$('s1').value; if(!s1){$('s1').focus();return}
-    var times=[['sd1','s1','e1'],['sd2','s2','e2']], base=new Date(), x=s1.split(':');
-    base.setHours(+x[0],+x[1],0,0);
-    if(base.getTime()>now+3600000)base.setDate(base.getDate()-1);
-    var day=new Date(base);day.setHours(0,0,0,0);var prev=0,sides=[];
+    var times=[['sd1','s1','e1'],['sd2','s2','e2']], base0=new Date(), x=s1.split(':');
+    base0.setHours(+x[0],+x[1],0,0);
+    if(base0.getTime()>now+3600000)base0.setDate(base0.getDate()-1);
+    var day=new Date(base0);day.setHours(0,0,0,0);var prev=0,sides=[];
     times.forEach(function(t){
       var s=$(t[1]).value,e=$(t[2]).value; if(!s)return;
       var sm=tm(day,s,prev); prev=sm; var em=null; if(e){em=tm(day,e,prev);prev=em}
@@ -167,18 +212,17 @@ $('save').onclick=function(){
     b.setHours(+y[0],+y[1],0,0); if(b.getTime()>now+3600000)b.setDate(b.getDate()-1);
     ent={id:now,type:'bottle',start:b.getTime(),oz:+$('oz').value||0};
   }
-  S.entries.push(ent);S.entries.sort(function(a,b){return b.start-a.start});save();
-  ['s1','e1','s2','e2'].forEach(function(i){$(i).value=''});$('sd1').value=$('sd1').value;calc();draw();window.scrollTo({top:0,behavior:'smooth'});
+  S.entries.push(ent);S.entries.sort(function(a,b){return b.start-a.start});cache();send('PUT','/e/'+ent.id,ent);
+  ['s1','e1','s2','e2'].forEach(function(i){$(i).value=''});calc();draw();window.scrollTo({top:0,behavior:'smooth'});
 };
-function tm(day,str,prev){var p=str.split(':'),d=new Date(day);d.setHours(+p[0],+p[1],0,0);var m=d.getTime();while(m<prev)m+=864e5;return m}
 
-/* list */
+/* ---- list ---- */
 function dayLabel(ms){var d=new Date(ms),t=new Date();t.setHours(0,0,0,0);var y=new Date(t);y.setDate(y.getDate()-1);var k=new Date(ms);k.setHours(0,0,0,0);
   if(+k===+t)return 'Today';if(+k===+y)return 'Yesterday';return d.toLocaleDateString([],{weekday:'long',month:'short',day:'numeric'})}
-function total(e){var t=0;e.sides.forEach(function(s){if(s.e)t+=mins(s.s,s.e)});return t}
+function total(e){var t=0;(e.sides||[]).forEach(function(s){if(s.e)t+=mins(s.s,s.e)});return t}
 function draw(){
   var tdy=new Date();tdy.setHours(0,0,0,0);var n=0,m=0,o=0;
-  S.entries.forEach(function(e){if(e.start>=+tdy){n++;if(e.type==='breast')m+=total(e);else o+=e.oz}});
+  S.entries.forEach(function(e){if(e.start>=+tdy){n++;if(e.type==='breast')m+=total(e);else o+=e.oz||0}});
   $('sum').innerHTML='<div><b>'+n+'</b>feedings today</div><div><b>'+m+'</b>nursing min</div><div><b>'+(Math.round(o*10)/10)+'</b>bottle oz</div>';
   if(!S.entries.length){$('list').innerHTML='<div class="empty">No feedings yet 💗<br>Your log will show up here.</div>';drawNext();return}
   var h='',last='';
@@ -186,18 +230,20 @@ function draw(){
     var dl=dayLabel(e.start);if(dl!==last){h+='<h2>'+dl+'</h2>';last=dl}
     var d;
     if(e.type==='breast'){
-      d=e.sides.map(function(s){return s.side+' '+(s.e?mins(s.s,s.e)+' min':'…')}).join(' · ')+(e.sides.length>1?' — <b>'+total(e)+' min total</b>':'');
-    }else d='🍼 Bottle — <b>'+e.oz+' oz</b>';
+      var sd=e.sides||[];
+      d=sd.map(function(s){return s.side+' '+(s.e?mins(s.s,s.e)+' min':'…')}).join(' · ')+(sd.length>1?' — <b>'+total(e)+' min total</b>':'');
+    }else d='🍼 Bottle — <b>'+(e.oz||0)+' oz</b>';
     h+='<div class="item"><div class="t">'+fmt(e.start)+'</div><div class="d">'+d+'</div><button class="x'+(pending===e.id?' sure':'')+'" data-id="'+e.id+'">'+(pending===e.id?'Delete?':'✕')+'</button></div>';
   });
   $('list').innerHTML=h;drawNext();
 }
 $('list').onclick=function(e){var id=e.target.getAttribute('data-id');if(!id)return;id=+id;
-  if(pending===id){S.entries=S.entries.filter(function(x){return x.id!==id});pending=null;save()}else pending=id;draw()};
+  if(pending===id){S.entries=S.entries.filter(function(x){return x.id!==id});pending=null;cache();send('DELETE','/e/'+id)}else pending=id;draw()};
 
+if(EMBED.db)$('cfgOpen').style.display='none';
 drawChips();setType('breast');calc();draw();
+if(!ready()){status('Not synced — saving on this phone only',1);openSetup()}else{status('Connecting…');listen();refresh()}
 setInterval(drawNext,30000);
 </script>
-
-
-</body></html>
+</body>
+</html>
